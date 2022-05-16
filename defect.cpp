@@ -27,12 +27,15 @@ vertex model's computeForces() funciton right before saving a state.
 */
 
 // #define _Brownian
+#define S 10
 
 int main(int argc, char*argv[])
 {
 // Seeds
-   vector<int> seeds{2,4,6,8};
-   
+vector<int> seeds{};
+for(int i=0; i<S; ++i){
+    seeds.emplace_back(i);
+}   
    
    char model[256];
 #ifdef _Brownian
@@ -102,10 +105,7 @@ int main(int argc, char*argv[])
        cerr<<"Failed to open seedfile\n";
    }
 
-// Simulation for each seed.
-   for (int seed : seeds) {
-       seedfile << seed << endl;
-
+   
     //check to see if we should run on a GPU
     bool initializeGPU = true;
     if (USE_GPU >= 0)
@@ -119,6 +119,12 @@ int main(int argc, char*argv[])
 
 
     bool runSPV = true;//setting this to true will relax the random cell positions to something more uniform before running vertex model dynamics
+
+    
+// Simulation for each seed.
+   for (int seed : seeds) {
+       seedfile << seed << endl;
+
 
     //define a vertex model configuration with a quadratic energy functional
     shared_ptr<VertexQuadraticEnergy> avm = make_shared<VertexQuadraticEnergy>(numpts,a0,p0,reproducible,runSPV);
