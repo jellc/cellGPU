@@ -1,0 +1,13 @@
+*.swp
+*.o
+*.gch
+*.out
+*_store
+callgrind*
+*.dsym
+*.sh
+doc/html/*
+doc/latex/*
+data/*
+script/*
+submit/*
