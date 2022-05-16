@@ -27,7 +27,7 @@ vertex model's computeForces() funciton right before saving a state.
 */
 
 // #define _Brownian
-#define S 10
+#define S 100
 
 int main(int argc, char*argv[])
 {
@@ -103,7 +103,8 @@ for(int i=0; i<S; ++i){
    fstream seedfile(seedf);
    if(!seedfile){
        cerr<<"Failed to open seedfile\n";
-   }
+       abort();
+    }
 
    
     //check to see if we should run on a GPU
@@ -120,7 +121,7 @@ for(int i=0; i<S; ++i){
 
     bool runSPV = true;//setting this to true will relax the random cell positions to something more uniform before running vertex model dynamics
 
-    
+
 // Simulation for each seed.
    for (int seed : seeds) {
        seedfile << seed << endl;
