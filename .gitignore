@@ -11,3 +11,4 @@ doc/latex/*
 data/*
 script/*
 submit/*
+.vscode/*

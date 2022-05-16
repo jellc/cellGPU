@@ -39,7 +39,6 @@ class updaterWithNoise : public updater
             };
 
         void setSeed(size_t seed) {
-            cout<<"Brownian seed: "<<seed<<endl;
             noise.setReproducibleSeed(seed);
         }
 

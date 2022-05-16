@@ -25,8 +25,22 @@ records the force from the last time "computeForces()" was called, and generally
 move the positions. If you want the forces and the positions to be sync'ed, you should call the
 vertex model's computeForces() funciton right before saving a state.
 */
+
+// #define _Brownian
+
 int main(int argc, char*argv[])
 {
+// Seeds
+   vector<int> seeds{2,4,6,8};
+   
+   
+   char model[256];
+#ifdef _Brownian
+    sprintf(model, "brownian");
+#else
+    sprintf(model, "self-propelled");
+#endif
+
     // ios::sync_with_stdio(0);
     // cin.tie(0);
     // cerr.tie(0);
@@ -34,6 +48,7 @@ int main(int argc, char*argv[])
 
 
     int numpts = 500; //number of cells
+    int Nvert = 2*numpts;
     int USE_GPU = -1; //0 or greater uses a gpu, any negative number runs on the cpu
     int tSteps = 100000; //number of time steps to run after initialization
     int initSteps = 2000; //number of initialization steps
@@ -78,6 +93,19 @@ int main(int argc, char*argv[])
     clock_t t1,t2; //clocks for timing information
     bool reproducible = true; // if you want random numbers with a more random seed each run, set this to false
 
+   char path[256];
+   sprintf(path, "data/%s", model);
+   char seedf[256];
+   sprintf(seedf, "%s/seeds.txt", path);
+   fstream seedfile(seedf);
+   if(!seedfile){
+       cerr<<"Failed to open seedfile\n";
+   }
+
+// Simulation for each seed.
+   for (int seed : seeds) {
+       seedfile << seed << endl;
+
     //check to see if we should run on a GPU
     bool initializeGPU = true;
     if (USE_GPU >= 0)
@@ -89,31 +117,20 @@ int main(int argc, char*argv[])
     else
         initializeGPU = false;
 
-    //possibly save output in netCDF format
-    char dataname[256];
-    sprintf(dataname,"./data/n=%d_t=%d_p=%.1f_a=%.1f_KA=%.1f_KP=%.1f.nc",numpts,tSteps,p0,a0,KA,KP);
-    int Nvert = 2*numpts;
-    AVMDatabaseNetCDF ncdat(Nvert,dataname,NcFile::Replace);
 
     bool runSPV = true;//setting this to true will relax the random cell positions to something more uniform before running vertex model dynamics
-
-    //We will define two potential equations of motion, and choose which later on.
-    //define an equation of motion object...here for self-propelled cells
-    EOMPtr spp = make_shared<selfPropelledCellVertexDynamics>(numpts,Nvert);
-    //the next lines declare a potential brownian dynamics scheme at some targe temperature
-    shared_ptr<brownianParticleDynamics> bd = make_shared<brownianParticleDynamics>(Nvert);
-    bd->setT(v0);
-
-// ここのseedをいじる！
-auto bd_seed = 4;
-bd->setSeed(bd_seed);
 
     //define a vertex model configuration with a quadratic energy functional
     shared_ptr<VertexQuadraticEnergy> avm = make_shared<VertexQuadraticEnergy>(numpts,a0,p0,reproducible,runSPV);
 
 // このseedを変えても結果おなじ
-auto vq_seed = 10;
-avm->setSeed(vq_seed);
+// auto vq_seed = 10;
+// avm->setSeed(vq_seed);
+
+    //possibly save output in netCDF format
+    char dataname[256];
+    sprintf(dataname,"%s/n=%d_t=%d_p=%.1f_a=%.1f_KA=%.1f_KP=%.1f_seed=%d.nc", path, numpts,tSteps,p0,a0,KA,KP,seed);
+    AVMDatabaseNetCDF ncdat(Nvert,dataname,NcFile::Replace);
     
     //set the cell preferences to uniformly have A_0 = 1, P_0 = p_0
     avm->setCellPreferencesUniform(a0,p0);
@@ -127,8 +144,24 @@ avm->setSeed(vq_seed);
     //combine the equation of motion and the cell configuration in a "Simulation"
     SimulationPtr sim = make_shared<Simulation>();
     sim->setConfiguration(avm);
+
+    
+    //We will define two potential equations of motion, and choose which later on.
+
+#ifdef _Brownian
+    shared_ptr<brownianParticleDynamics> bd = make_shared<brownianParticleDynamics>(Nvert);
+    bd->setT(v0);
+    bd->setSeed(seed);
     sim->addUpdater(bd,avm);
-    //one could have written "sim->addUpdater(spp,avm);" to use the active cell dynamics instead
+    cout<<"\nBrownian\n\n";
+#else
+    EOMPtr spp = make_shared<selfPropelledCellVertexDynamics>(numpts,Nvert);
+    spp->setSeed(seed);
+    sim->addUpdater(spp, avm);
+    cout<<"\nSelf-Propelled\n";
+#endif
+            cout<<"Noise seed: "<<seed<<"\n\n";
+
 
     //set the time step size
     sim->setIntegrationTimestep(dt);
@@ -147,6 +180,7 @@ avm->setSeed(vq_seed);
     // };
 
     ncdat.WriteState(avm); // Before initialization
+    cout <<fixed<<setprecision(15)<< "Mean q = " << avm->reportq() << endl;
     //perform some initial time steps. If program_switch < 0, save periodically to a netCDF database
     for (int timestep = 0; timestep < initSteps+1; ++timestep)
         {
@@ -159,6 +193,7 @@ avm->setSeed(vq_seed);
         };
     avm->reportMeanVertexForce();
     ncdat.WriteState(avm); // After initialization
+    cout <<fixed<<setprecision(15)<< "Mean q = " << avm->reportq() << endl;
     
     // { // Dump (A0, P0)
     // ArrayHandle<Dscalar2> vcn(avm->returnAreaPeriPreferences());
@@ -185,14 +220,14 @@ avm->setSeed(vq_seed);
     // cout<<vcn.data[0].x<<" "<<vcn.data[0].y<<endl;
     // };
 
-    ncdat.WriteState(avm); // Final state
     t2=clock();
     cout << "timestep time per iteration currently at " <<  (t2-t1)/(Dscalar)CLOCKS_PER_SEC/tSteps << endl << endl;
     avm->reportMeanVertexForce();
+    ncdat.WriteState(avm); // Final state
     cout <<fixed<<setprecision(15)<< "Mean q = " << avm->reportq() << endl;
 
     cout<< "output: "<<dataname<<endl;
-
+   }
     
 //     char fs[256],f[256];
 //     sprintf(fs, "a%.1f_fs", a0);
@@ -225,14 +260,12 @@ avm->setSeed(vq_seed);
     //     }
     // };
     
-    // if(initializeGPU)
-    //     cudaDeviceReset();
+    if(initializeGPU)
+        cudaDeviceReset();
 
-// cerr<<"seed: "<<avm->noise.RNGSeed<<endl;
-
-    cout<<"Done!\n";
+    cout<<"\nDone!\n";
     return 0;
-    };
+}
 
 /**
 @note
